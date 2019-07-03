@@ -6,3 +6,83 @@ https://hevodata.com/blog/redshift-vacuum-and-analyze/
 https://medium.com/cloudwithmore/aws-athena-vs-google-bigquery-81a5e885d5c6
 https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying
 https://dataschool.com/books/
+
+
+
+import boto3
+from botocore.exceptions import ClientError
+import datetime
+import gzip
+from io import BytesIO
+import logging
+from src.Util import settings
+
+s3_client = boto3.client('s3')
+s3_resorce = boto3.resource('s3')
+
+
+def get_files_s3():
+    list_files = []
+    prefix = ''
+    try:
+        response = s3_client.list_objects(
+            Bucket=settings.source_bucket,
+            Prefix=prefix
+        )
+        for file in response['Contents']:
+            file_name = file['Key']
+            list_files.append(file_name)
+
+        return list_files
+
+    except Exception as e:
+        print(e)
+        return None
+
+
+def read_file(file_name):
+    content_object = s3_resorce.Object(settings.source_bucket, file_name)
+    file_content = content_object.get()['Body'].read()
+    gzipfile = BytesIO(file_content)
+    gzipfile = gzip.GzipFile(fileobj=gzipfile)
+    file_content = gzipfile.read().decode('utf-8')
+    return file_content
+
+
+def upload_file(binary_data, file_name):
+    now = datetime.datetime.now()
+    file_name = file_name.split('.')
+    file_name = file_name[0]
+    format_name = str(now).replace('-', '')
+    format_name = format_name.replace(':', '')
+    format_name = format_name.replace(' ', '')
+    format_name = format_name.replace('.', '')
+    output_name = settings.destination_folder + '/' + file_name + '-' + format_name + '.gzip'
+
+    s3 = boto3.resource('s3')
+
+    try:
+        s3.Bucket(settings.target_bucket).put_object(Key=output_name, Body=binary_data,
+                                                     ServerSideEncryption='AES256')
+        print('uploaded')
+    except ClientError as e:
+        logging.error(e)
+        return 0
+
+    return 1
+
+
+def change_separator(content):
+    content = content.replace(',', '|')
+    return content
+
+
+def add_false_header(content):
+    content = '\n' + content
+    return content
+
+
+def gzipped(content):
+    result = gzip.compress(content.encode())
+    return result
+
