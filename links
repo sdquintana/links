@@ -86,3 +86,23 @@ def gzipped(content):
     result = gzip.compress(content.encode())
     return result
 
+
+
+from src.Util import s3_utilities as utilities
+
+
+def handler(event, context):
+    file_list = utilities.get_files_s3()
+
+    print('\nfiles:')
+
+    if str(type(file_list)) == "<class 'list'>":
+        for row in file_list:
+            print(row)
+            content_file = utilities.read_file(row)
+            content_file = utilities.change_separator(content_file)
+            gzipped_file = utilities.gzipped(content_file)
+            utilities.upload_file(gzipped_file, row)
+    else:
+        print('No files')
+
